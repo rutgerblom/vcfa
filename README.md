@@ -33,9 +33,9 @@ You must also export credentials before running Terraform (see the VCFA provider
 
 ## 🧩 Configuration
 
-All inputs are defined in [`variables.tf`](./variables.tf).  
+All inputs are defined in [`variables.tf`](/provider/variables.tf).  
 To make setup easier, this repository includes an example configuration file:  
-👉 [`terraform.tfvars.example`](./terraform.tfvars.example)
+👉 [`terraform.tfvars.example`](/provider/terraform.tfvars.example)
 
 Copy it before your first run:
 
