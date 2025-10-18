@@ -138,3 +138,31 @@ variable "vcfa_quota_storage_limit_mib" {
   description = "Per-org storage cap for the region storage policy (MiB)"
   default     = 1048576 # 1 TiB
 }
+
+# Enable or disable networking creation
+variable "enable_org_networking" {
+  type        = bool
+  description = "Whether to create vcfa_org_networking for selected orgs"
+  default     = true
+}
+
+# Limit creation to specific org names; empty list = all orgs
+variable "networking_target_org_names" {
+  type        = list(string)
+  description = "Exact org names to attach networking to (e.g., [\"org_it_001\"]). Empty = all."
+  default     = []
+}
+
+# Optional prefix/suffix for log_name
+variable "network_log_name_prefix" {
+  type        = string
+  description = "Optional prefix for log_name (keep short)"
+  default     = ""
+}
+
+variable "network_log_name_suffix" {
+  type        = string
+  description = "Optional suffix for log_name (keep short)"
+  default     = ""
+}
+

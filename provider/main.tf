@@ -103,3 +103,34 @@ resource "vcfa_org_region_quota" "quota" {
     storage_limit_mib        = var.vcfa_quota_storage_limit_mib
   }
 }
+
+# ---------------------------------------------------------------------------
+# Org networking (one per org). log_name ≤ 8 chars, derived from org name.
+# ---------------------------------------------------------------------------
+
+locals {
+  # Build short names (e.g., org_it_014 → it014, org_ot_007 → ot007)
+  org_log_short = {
+    for k in keys(vcfa_org.labs) :
+    k => "${split("_", k)[1]}${split("_", k)[2]}"
+  }
+
+  # Determine which orgs get networking
+  networking_target_orgs = length(var.networking_target_org_names) > 0 ? {
+    for k, v in vcfa_org.labs : k => v
+    if contains(var.networking_target_org_names, k)
+  } : vcfa_org.labs
+}
+
+resource "vcfa_org_networking" "this" {
+  for_each = var.enable_org_networking ? local.networking_target_orgs : {}
+
+  org_id = each.value.id
+
+  # Construct short log name, trimmed to max 8 characters
+  log_name = substr(
+    "${var.network_log_name_prefix}${local.org_log_short[each.key]}${var.network_log_name_suffix}",
+    0,
+    8
+  )
+}
