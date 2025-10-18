@@ -33,24 +33,38 @@ You must also export credentials before running Terraform (see the VCFA provider
 
 ## 🧩 Configuration
 
-All inputs are defined in [`variables.tf`](./variables.tf) and customized in [`terraform.tfvars`](./terraform.tfvars).
+All inputs are defined in [`variables.tf`](./variables.tf).  
+To make setup easier, this repository includes an example configuration file:  
+👉 [`terraform.tfvars.example`](./terraform.tfvars.example)
+
+Copy it before your first run:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Then edit the new `terraform.tfvars` file with values for your environment (VCFA endpoint, region, etc.).
+
+> 💡 **Tip:**  
+> Never commit your real `terraform.tfvars` file if it contains sensitive data such as passwords.  
+> The `.example` file should remain generic and safe for sharing.
 
 Example key settings:
 
 | Variable | Example | Description |
 |-----------|----------|-------------|
-| `vcfa_url` | `"https://pod-240-vcf-automation.sddc.lab"` | Base VCFA API URL |
-| `vcfa_region_name` | `"eu-north-1"` | Target region |
-| `org_groups` | `[ { prefix = "org_it", count = 35 }, { prefix = "org_ot", count = 35 } ]` | Number and naming of orgs |
-| `vcfa_edge_cluster_name` | `"edge-cluster"` | Edge cluster for regional networking |
-| `vcfa_provider_gateway_name_it` | `"provider_gw_org_it"` | Provider gateway for IT orgs |
-| `vcfa_provider_gateway_name_ot` | `"provider_gw_org_ot"` | Provider gateway for OT orgs |
+| `vcfa_url` | `"https://vcfa.example.lab"` | Base VCFA API URL |
+| `vcfa_region_name` | `"lab-region-1"` | Target region |
+| `org_groups` | `[ { prefix = "org_it", count = 2 }, { prefix = "org_ot", count = 2 } ]` | Number and naming of orgs |
+| `vcfa_edge_cluster_name` | `"edge-cluster-1"` | Edge cluster for regional networking |
+| `vcfa_provider_gateway_name_it` | `"pgw_it"` | Provider gateway for IT orgs |
+| `vcfa_provider_gateway_name_ot` | `"pgw_ot"` | Provider gateway for OT orgs |
 | `org_admin_password` | (env var) | Admin password for all orgs |
 
 > 💡 **Tip:** Don’t hardcode passwords.  
 > Use environment variables instead:  
 > ```bash
-> export TF_VAR_org_admin_password='VMware1!VMware1!'
+> export TF_VAR_org_admin_password='ChangeMe123!'
 > ```
 
 ---
@@ -131,11 +145,11 @@ terraform destroy -target='vcfa_org_regional_networking.this' -parallelism=1
 
 After applying successfully, you’ll have:
 
-- 70 organizations (`org_it_001` → `org_ot_035`)  
-- 70 admin users (`admin_it_001`, etc.)  
-- 70 region quotas  
-- 70 org networking objects  
-- 70 regional networking connections attached to correct gateways  
+- Multiple organizations (e.g., `org_it_001` → `org_ot_002`)  
+- One admin user per org (`admin_it_001`, etc.)  
+- One region quota per org  
+- One org networking object per org  
+- One regional networking connection per org attached to correct gateways  
 
 ---
 
