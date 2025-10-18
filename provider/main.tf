@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# main.tf — parameterized org creation, admins, and regional quotas
+# main.tf — parameterized org creation, admins, quotas, and networking
 # ---------------------------------------------------------------------------
 
 # Build a flat list of org names from groups (prefix + count)
@@ -133,4 +133,47 @@ resource "vcfa_org_networking" "this" {
     0,
     8
   )
+
+  # 🔒 protect from deletes & accidental updates (incl. log_name)
+  lifecycle {
+    ignore_changes  = [log_name]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Regional networking per org (reuses data.vcfa_region.target)
+# ---------------------------------------------------------------------------
+
+# Edge cluster lookup in the existing region
+data "vcfa_edge_cluster" "target" {
+  name      = var.vcfa_edge_cluster_name
+  region_id = data.vcfa_region.target.id
+}
+
+# Provider gateways (IT / OT) in the same region
+data "vcfa_provider_gateway" "it" {
+  name      = var.vcfa_provider_gateway_name_it
+  region_id = data.vcfa_region.target.id
+}
+
+data "vcfa_provider_gateway" "ot" {
+  name      = var.vcfa_provider_gateway_name_ot
+  region_id = data.vcfa_region.target.id
+}
+
+# One regional networking per org networking
+resource "vcfa_org_regional_networking" "this" {
+  for_each = vcfa_org_networking.this
+
+  # Parametric name; inserts the org name
+  name = replace(var.org_regional_networking_name_template, "$${name}", each.key)
+
+  # Per docs: org_id should be the *org networking* ID (it contains the org link)
+  org_id    = each.value.id
+  region_id = data.vcfa_region.target.id
+
+  # Choose provider gateway by org prefix — keep ternary on one line
+  provider_gateway_id = startswith(each.key, "org_it_") ? data.vcfa_provider_gateway.it.id : data.vcfa_provider_gateway.ot.id
+
+  edge_cluster_id = data.vcfa_edge_cluster.target.id
 }

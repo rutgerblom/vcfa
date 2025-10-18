@@ -166,3 +166,28 @@ variable "network_log_name_suffix" {
   default     = ""
 }
 
+# ---- Region / Edge / Provider Gateways ----
+
+variable "vcfa_edge_cluster_name" {
+  type        = string
+  description = "Edge cluster name in the region (e.g., edge-cluster)"
+}
+
+variable "vcfa_provider_gateway_name_it" {
+  type        = string
+  description = "Provider gateway name for IT orgs (org_it_*)"
+}
+
+variable "vcfa_provider_gateway_name_ot" {
+  type        = string
+  description = "Provider gateway name for OT orgs (org_ot_*)"
+}
+
+# ---- Naming template for org regional networking ----
+# Use $${name} as placeholder for the org name (literal $ escaped)
+variable "org_regional_networking_name_template" {
+  type        = string
+  description = "Template for regional networking name; use $${name} to insert org name"
+  default     = "$${name}-regional"
+}
+
