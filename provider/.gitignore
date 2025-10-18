@@ -1,0 +1,6 @@
+# Ignore sensitive Terraform files
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+api_token.json
+vcfa.log
