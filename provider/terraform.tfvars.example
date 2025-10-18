@@ -1,0 +1,119 @@
+###############################################################################
+# VMware Cloud Foundation Automation (VCFA) – Example Configuration
+# ---------------------------------------------------------------------------
+# This file contains environment-specific values used by Terraform.
+#
+# 👉 Adjust names, regions, and prefixes to fit your lab.
+# 👉 Never commit real passwords or API keys if this repo is shared.
+###############################################################################
+
+# =============================================================================
+# 🔐 VCFA Provider Connection
+# =============================================================================
+# URL of your VCF Automation API endpoint.
+# Include https:// and no trailing slash.
+vcfa_url = "https://vcfa.example.lab"
+
+# Allow self-signed or unverified SSL certificates.
+# Recommended: true for labs, false for production.
+vcfa_allow_unverified_ssl = true
+
+# Provider organization name (usually "System" for provider-level operations).
+vcfa_organization = "System"
+
+# =============================================================================
+# 🏗️ Organization Generation
+# =============================================================================
+# Each object defines a prefix (org_it/org_ot) and how many sequential orgs to create.
+# Example below creates org_it_001–002 and org_ot_001–002.
+org_groups = [
+  { prefix = "org_it", count = 2 },
+  { prefix = "org_ot", count = 2 },
+]
+
+# Template for org descriptions ($${name} inserts the org name).
+org_description_template = "Created by Terraform $${name}"
+
+# Whether new orgs should be enabled immediately.
+org_enabled = true
+
+# =============================================================================
+# 👤 Org Administrator Accounts
+# =============================================================================
+# Terraform builds admin usernames automatically by replacing 'org_' with 'admin_'.
+# Example: org_it_001 → admin_it_001
+admin_user_replace_from = "org_"
+admin_user_replace_to   = "admin_"
+
+# 🧠 Password note:
+# It’s best practice to set passwords via environment variables:
+#   export TF_VAR_org_admin_password='ChangeMe123!'
+# The line below is ONLY an example. Prefer the env var above.
+org_admin_password = "ChangeMe123!"
+
+# =============================================================================
+# 🌐 Infrastructure References
+# =============================================================================
+# These names must exactly match what exists in your VCF environment.
+
+vcfa_vcenter_name               = "vcsa.example.lab"
+vcfa_supervisor_name            = "supervisor-1"
+vcfa_region_name                = "lab-region-1"
+vcfa_region_zone_name           = "zone-a"
+vcfa_region_storage_policy_name = "vSAN Default Storage Policy"
+
+# =============================================================================
+# 🧮 Quota Configuration
+# =============================================================================
+# Resource limits applied to each organization.
+
+vcfa_vm_class_names = [
+  "best-effort-xsmall",
+  "best-effort-small",
+  "best-effort-medium",
+  "best-effort-large",
+  "best-effort-xlarge",
+  "best-effort-2xlarge",
+  "best-effort-4xlarge",
+  "best-effort-8xlarge",
+]
+
+# CPU and memory limits (MHz/MiB)
+vcfa_quota_cpu_limit_mhz          = 50000
+vcfa_quota_cpu_reservation_mhz    = 0
+vcfa_quota_memory_limit_mib       = 51200
+vcfa_quota_memory_reservation_mib = 0
+
+# Storage cap per org (MiB)
+vcfa_quota_storage_limit_mib      = 524288  # = 512 GiB
+
+# =============================================================================
+# 🧩 Organization Networking
+# =============================================================================
+# Create a networking construct per org (log_name ≤ 8 chars total).
+# If you want to restrict to specific orgs, list them under networking_target_org_names.
+
+enable_org_networking       = true
+networking_target_org_names = []   # Leave empty to apply to all orgs.
+
+# Optional short prefix/suffix for log_name (each ≤ 3–4 chars to stay under 8 total)
+network_log_name_prefix = ""
+network_log_name_suffix = ""
+
+# =============================================================================
+# 🏗️ Region / Edge / Provider Gateways
+# =============================================================================
+# These must correspond to objects that already exist in your VCFA region.
+
+vcfa_edge_cluster_name = "edge-cluster-1"
+
+# Separate provider gateways for IT and OT org families
+vcfa_provider_gateway_name_it = "pgw_it"
+vcfa_provider_gateway_name_ot = "pgw_ot"
+
+# =============================================================================
+# 🔧 Regional Networking Naming
+# =============================================================================
+# Template used for naming the regional networking object per org.
+# Use $${name} to inject the org name automatically.
+org_regional_networking_name_template = "$${name}-regional"
