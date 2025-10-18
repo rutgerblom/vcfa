@@ -1,10 +1,11 @@
 # Configure the VMware Cloud Foundation Automation Provider
 provider "vcfa" {
-  auth_type             = "api_token"
-  api_token             = var.vcfa_api_token
+  auth_type             = "integrated"
+  user                  = "admin"
+  password              = "VMware1!VMware1!"
   org                   = var.vcfa_organization
   url                   = var.vcfa_url
   allow_unverified_ssl  = var.vcfa_allow_unverified_ssl
-  logging               = true # Enables logging
+  logging               = false # Enables logging
   logging_file          = "vcfa.log"
 }

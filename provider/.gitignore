@@ -2,5 +2,4 @@
 *.tfstate
 *.tfstate.backup
 terraform.tfvars
-api_token.json
 vcfa.log
