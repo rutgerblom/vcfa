@@ -218,39 +218,3 @@ variable "org_regional_networking_name_template" {
   description = "Template for regional networking name; use $${name} to insert the org name"
   default     = "$${name}-regional"
 }
-
-# =============================================================================
-# 🧱 Safety: Prevent accidental destruction
-# =============================================================================
-# Protects critical resources from being destroyed unless explicitly disabled.
-# Set these to false temporarily if you need to rebuild an environment.
-
-variable "protect_orgs" {
-  type        = bool
-  description = "Prevent destroying vcfa_org.labs (recommended: true)"
-  default     = true
-}
-
-variable "protect_org_users" {
-  type        = bool
-  description = "Prevent destroying org admin users"
-  default     = false
-}
-
-variable "protect_org_region_quota" {
-  type        = bool
-  description = "Prevent destroying vcfa_org_region_quota.quota"
-  default     = false
-}
-
-variable "protect_org_networking" {
-  type        = bool
-  description = "Prevent destroying vcfa_org_networking.this (recommended: true)"
-  default     = true
-}
-
-variable "protect_org_regional_networking" {
-  type        = bool
-  description = "Prevent destroying vcfa_org_regional_networking.this"
-  default     = false
-}

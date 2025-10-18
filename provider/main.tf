@@ -2,7 +2,6 @@
 # main.tf — parameterized org creation, admins, quotas, and networking
 # ---------------------------------------------------------------------------
 
-# Build a flat list of org names from groups (prefix + count)
 locals {
   all_orgs = flatten([
     for g in var.org_groups : [
@@ -13,7 +12,7 @@ locals {
 }
 
 # ----------------------------------------------------------------------------
-# Orgs
+# Orgs (protected from accidental destroy)
 # ----------------------------------------------------------------------------
 resource "vcfa_org" "labs" {
   for_each     = toset(local.all_orgs)
@@ -22,10 +21,11 @@ resource "vcfa_org" "labs" {
   description  = replace(var.org_description_template, "$${name}", each.key)
   is_enabled   = var.org_enabled
 
-  # 🔒 Destruction guardrail: blocks accidental deletes of orgs.
-  # Turn off by applying with: -var='protect_orgs=false'
+  # 🔒 Guardrail: prevent accidental deletion of orgs.
+  # To intentionally delete orgs, temporarily change this to `false`,
+  # then run your destroy. Switch back to `true` afterwards.
   lifecycle {
-    prevent_destroy = var.protect_orgs
+    prevent_destroy = true
   }
 }
 
@@ -33,14 +33,12 @@ resource "vcfa_org" "labs" {
 # Add an Organization Administrator user to each org
 # ---------------------------------------------------------------------------
 
-# Lookup the org-scoped role (parametric name)
 data "vcfa_role" "org_admin" {
   for_each = vcfa_org.labs
   org_id   = each.value.id
   name     = var.org_admin_role_name
 }
 
-# Create one local admin user per org (parametric username pattern + password)
 resource "vcfa_org_local_user" "admins" {
   for_each = vcfa_org.labs
 
@@ -49,10 +47,7 @@ resource "vcfa_org_local_user" "admins" {
   password = var.org_admin_password
   role_ids = [data.vcfa_role.org_admin[each.key].id]
 
-  # 🔒 Optional guardrail for users (defaults to false).
-  lifecycle {
-    prevent_destroy = var.protect_org_users
-  }
+  # (No prevent_destroy here so you can tear users down freely.)
 }
 
 # ---------------------------------------------------------------------------
@@ -77,21 +72,19 @@ data "vcfa_region_zone" "target" {
   name      = var.vcfa_region_zone_name
 }
 
-# Resolve region-scoped VM class IDs from names
 data "vcfa_region_vm_class" "vmc" {
   for_each  = toset(var.vcfa_vm_class_names)
   name      = each.key
   region_id = data.vcfa_region.target.id
 }
 
-# Resolve region storage policy by name
 data "vcfa_region_storage_policy" "sp" {
   name      = var.vcfa_region_storage_policy_name
   region_id = data.vcfa_region.target.id
 }
 
 # ---------------------------------------------------------------------------
-# One org_region_quota per org
+# One org_region_quota per org (no prevent_destroy so you can clean up easily)
 # ---------------------------------------------------------------------------
 resource "vcfa_org_region_quota" "quota" {
   for_each = vcfa_org.labs
@@ -114,25 +107,18 @@ resource "vcfa_org_region_quota" "quota" {
     region_storage_policy_id = data.vcfa_region_storage_policy.sp.id
     storage_limit_mib        = var.vcfa_quota_storage_limit_mib
   }
-
-  # 🔒 Optional guardrail for quotas.
-  lifecycle {
-    prevent_destroy = var.protect_org_region_quota
-  }
 }
 
 # ---------------------------------------------------------------------------
-# Org networking (one per org). log_name ≤ 8 chars, derived from org name.
+# Org networking (protected + ignore log_name drift)
 # ---------------------------------------------------------------------------
 
 locals {
-  # Build short names (e.g., org_it_014 → it014, org_ot_007 → ot007)
   org_log_short = {
     for k in keys(vcfa_org.labs) :
     k => "${split("_", k)[1]}${split("_", k)[2]}"
   }
 
-  # Determine which orgs get networking
   networking_target_orgs = length(var.networking_target_org_names) > 0 ? {
     for k, v in vcfa_org.labs : k => v
     if contains(var.networking_target_org_names, k)
@@ -144,33 +130,31 @@ resource "vcfa_org_networking" "this" {
 
   org_id = each.value.id
 
-  # Construct short log name, trimmed to max 8 characters
+  # Ensure ≤ 8 chars total; derived from org name
   log_name = substr(
     "${var.network_log_name_prefix}${local.org_log_short[each.key]}${var.network_log_name_suffix}",
-    0,
-    8
+    0, 8
   )
 
   # 🔒 Guardrails:
-  #  - ignore_changes keeps Terraform from “helpfully” changing log_name later.
-  #  - prevent_destroy protects org networking unless you disable it on purpose.
+  #  - ignore_changes prevents the provider from trying to “revert” log_name.
+  #  - prevent_destroy avoids accidental deletes of org networking.
+  #    To delete orgs, set this to false temporarily and destroy networking first.
   lifecycle {
     ignore_changes  = [log_name]
-    prevent_destroy = var.protect_org_networking
+    prevent_destroy = true
   }
 }
 
 # ---------------------------------------------------------------------------
-# Regional networking per org (reuses data.vcfa_region.target)
+# Regional networking per org (no prevent_destroy; serialize applies instead)
 # ---------------------------------------------------------------------------
 
-# Edge cluster lookup in the existing region
 data "vcfa_edge_cluster" "target" {
   name      = var.vcfa_edge_cluster_name
   region_id = data.vcfa_region.target.id
 }
 
-# Provider gateways (IT / OT) in the same region
 data "vcfa_provider_gateway" "it" {
   name      = var.vcfa_provider_gateway_name_it
   region_id = data.vcfa_region.target.id
@@ -181,24 +165,14 @@ data "vcfa_provider_gateway" "ot" {
   region_id = data.vcfa_region.target.id
 }
 
-# One regional networking per org networking
 resource "vcfa_org_regional_networking" "this" {
   for_each = vcfa_org_networking.this
 
-  # Parametric name; inserts the org name
-  name = replace(var.org_regional_networking_name_template, "$${name}", each.key)
-
-  # Per docs: org_id should be the *org networking* ID (it contains the org link)
-  org_id    = each.value.id
-  region_id = data.vcfa_region.target.id
-
-  # Choose provider gateway by org prefix — keep ternary on one line
+  name        = replace(var.org_regional_networking_name_template, "$${name}", each.key)
+  org_id      = each.value.id
+  region_id   = data.vcfa_region.target.id
   provider_gateway_id = startswith(each.key, "org_it_") ? data.vcfa_provider_gateway.it.id : data.vcfa_provider_gateway.ot.id
+  edge_cluster_id     = data.vcfa_edge_cluster.target.id
 
-  edge_cluster_id = data.vcfa_edge_cluster.target.id
-
-  # 🔒 Optional guardrail for regional networking.
-  lifecycle {
-    prevent_destroy = var.protect_org_regional_networking
-  }
+  # (No prevent_destroy — destroy/apply these in serialized batches with -parallelism=1.)
 }
