@@ -12,13 +12,21 @@ locals {
   ])
 }
 
-# Create orgs
+# ----------------------------------------------------------------------------
+# Orgs
+# ----------------------------------------------------------------------------
 resource "vcfa_org" "labs" {
   for_each     = toset(local.all_orgs)
   name         = each.key
   display_name = each.key
   description  = replace(var.org_description_template, "$${name}", each.key)
   is_enabled   = var.org_enabled
+
+  # 🔒 Destruction guardrail: blocks accidental deletes of orgs.
+  # Turn off by applying with: -var='protect_orgs=false'
+  lifecycle {
+    prevent_destroy = var.protect_orgs
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -39,8 +47,12 @@ resource "vcfa_org_local_user" "admins" {
   org_id   = each.value.id
   username = replace(each.key, var.admin_user_replace_from, var.admin_user_replace_to)
   password = var.org_admin_password
-
   role_ids = [data.vcfa_role.org_admin[each.key].id]
+
+  # 🔒 Optional guardrail for users (defaults to false).
+  lifecycle {
+    prevent_destroy = var.protect_org_users
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -102,6 +114,11 @@ resource "vcfa_org_region_quota" "quota" {
     region_storage_policy_id = data.vcfa_region_storage_policy.sp.id
     storage_limit_mib        = var.vcfa_quota_storage_limit_mib
   }
+
+  # 🔒 Optional guardrail for quotas.
+  lifecycle {
+    prevent_destroy = var.protect_org_region_quota
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -134,9 +151,12 @@ resource "vcfa_org_networking" "this" {
     8
   )
 
-  # 🔒 protect from deletes & accidental updates (incl. log_name)
+  # 🔒 Guardrails:
+  #  - ignore_changes keeps Terraform from “helpfully” changing log_name later.
+  #  - prevent_destroy protects org networking unless you disable it on purpose.
   lifecycle {
     ignore_changes  = [log_name]
+    prevent_destroy = var.protect_org_networking
   }
 }
 
@@ -176,4 +196,9 @@ resource "vcfa_org_regional_networking" "this" {
   provider_gateway_id = startswith(each.key, "org_it_") ? data.vcfa_provider_gateway.it.id : data.vcfa_provider_gateway.ot.id
 
   edge_cluster_id = data.vcfa_edge_cluster.target.id
+
+  # 🔒 Optional guardrail for regional networking.
+  lifecycle {
+    prevent_destroy = var.protect_org_regional_networking
+  }
 }
