@@ -1,32 +1,74 @@
 ###############################################################################
-# Terraform files (state, lock, and local caches)
+# Terraform
 ###############################################################################
-# Provider cache and plugin data
-**/.terraform/
-**/.terraform.lock.hcl
 
-# Local Terraform state files
-**/terraform.tfstate
-**/terraform.tfstate.*
-**/.terraform.tfstate.lock.info
-**/crash.log
-**/*.tfstate.backup
+# Local .terraform directories (providers, plugins, etc.)
+.terraform/
 
-# Local variable files (sensitive / environment-specific)
-**/terraform.tfvars
-**/*.auto.tfvars
-**/*.tfvars.json
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Lock files (provider versions and state locks)
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
+
+# Terraform plan outputs
+*.tfplan
+*.tfvars.json
+
+# Ignore any sensitive local variables (keep only .example files)
+terraform.tfvars
+*.auto.tfvars
 
 ###############################################################################
-# Editor and OS files
+# macOS
 ###############################################################################
-# macOS Finder metadata
+
+# macOS metadata
 .DS_Store
+.AppleDouble
+.LSOverride
 
-# Editor folders
+# Icon must end with two carriage returns
+Icon
+
+# Thumbnails
+._*
+
+# macOS volume metadata
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+###############################################################################
+# Visual Studio Code
+###############################################################################
+
 .vscode/
-.idea/
+.history/
+*.code-workspace
 
-# Swap/temporary files
+###############################################################################
+# Other system or local artifacts
+###############################################################################
+
+# Logs and temp files
+*.log
+*.tmp
 *.swp
-*.swo
+*.bak
+*.backup
+*.orig
+
+# Python virtual envs (if using local scripting)
+.venv/
+venv/
+__pycache__/
+
+# Local build artifacts
+dist/
+build/
