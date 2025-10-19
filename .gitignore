@@ -1,0 +1,32 @@
+###############################################################################
+# Terraform files (state, lock, and local caches)
+###############################################################################
+# Provider cache and plugin data
+**/.terraform/
+**/.terraform.lock.hcl
+
+# Local Terraform state files
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/.terraform.tfstate.lock.info
+**/crash.log
+**/*.tfstate.backup
+
+# Local variable files (sensitive / environment-specific)
+**/terraform.tfvars
+**/*.auto.tfvars
+**/*.tfvars.json
+
+###############################################################################
+# Editor and OS files
+###############################################################################
+# macOS Finder metadata
+.DS_Store
+
+# Editor folders
+.vscode/
+.idea/
+
+# Swap/temporary files
+*.swp
+*.swo

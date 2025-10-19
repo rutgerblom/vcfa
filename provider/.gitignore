@@ -1,7 +1,0 @@
-# Ignore sensitive Terraform files
-*.tfstate
-*.tfstate.backup
-terraform.tfstate*
-terraform.tfvars
-vcfa.log
-.DS_Store
