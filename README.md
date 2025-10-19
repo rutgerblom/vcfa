@@ -1,3 +1,31 @@
+# VMware Cloud Foundation Automation (VCFA) — Terraform Projects
+
+This repository is a growing collection of **Terraform automation blueprints** for managing and extending **VMware Cloud Foundation Automation (VCFA)** environments.
+
+Each subdirectory represents a **self-contained Terraform project** targeting a specific VCFA use case — starting with the [`provider/`](./provider) module for **organization provisioning and regional networking**.
+
+The long-term goal is to build a **modular automation toolkit** for VCFA operators and architects, covering:
+- Provider-level onboarding (organizations, quotas, networking)
+- Tenant lifecycle management
+- Regional resource configuration
+- Catalog and content library setup
+- Policy and access control automation
+
+---
+
+## Current Project: `/provider`
+
+The [`provider/`](./provider) module automates creation of multiple VCFA organizations, admin users, regional quotas, and both org-level and regional networking — all parameterized and idempotent.
+
+It’s designed for:
+- Lab or PoC automation
+- Consistent org provisioning across multiple environments
+- Demonstrating VCFA provider-level API usage with Terraform
+
+For full usage details, see [`/provider/README.md`](./provider/README.md).
+
+---
+
 # VMware Cloud Foundation Automation (VCFA) — Multi-Org Terraform Deployment
 
 This Terraform project automates the deployment of multiple **organizations** in VMware Cloud Foundation Automation (VCFA).  
