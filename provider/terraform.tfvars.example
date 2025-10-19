@@ -18,11 +18,16 @@ vcfa_auth_type = "integrated"
 vcfa_url = "https://vcfa.example.lab"
 
 # Allow self-signed or unverified SSL certificates.
-# Recommended: true for labs, false for production.
 vcfa_allow_unverified_ssl = true
 
 # Provider organization name (usually "System" for provider-level operations).
 vcfa_organization = "System"
+
+# Enable or disable logging.
+vcfa_logging = false
+
+# Name of the log file.
+vcfa_log_file = "vcfa.log" 
 
 # (Optional) Credentials are typically provided via environment variables:
 #   export TF_VAR_vcfa_user="administrator"

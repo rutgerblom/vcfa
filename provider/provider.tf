@@ -6,6 +6,6 @@ provider "vcfa" {
   org                  = var.vcfa_organization
   url                  = var.vcfa_url
   allow_unverified_ssl = var.vcfa_allow_unverified_ssl
-  logging              = false # Enables logging
-  logging_file         = "vcfa.log"
+  logging              = var.vcfa_logging
+  logging_file         = var.vcfa_log_file
 }

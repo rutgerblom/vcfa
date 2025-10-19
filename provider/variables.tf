@@ -20,8 +20,18 @@ variable "vcfa_url" {
 }
 
 variable "vcfa_allow_unverified_ssl" {
-  description = "Allow self-signed or unverified SSL certificates (true for labs)."
+  description = "Allow self-signed or unverified SSL certificates."
   type        = bool
+}
+
+variable "vcfa_logging" {
+  description = "Control logging."
+  type        = bool
+}
+
+variable "vcfa_log_file" {
+  description = "Name of the log file."
+  type        = string
 }
 
 variable "vcfa_organization" {
