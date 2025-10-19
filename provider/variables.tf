@@ -62,12 +62,13 @@ variable "org_families" {
     condition     = length(var.org_families) > 0
     error_message = "org_families must contain at least one family."
   }
+  # Ensure count is an integer >= 0 and family name is safe
   validation {
     condition = alltrue([
       for f in var.org_families :
-      f.count >= 0 && can(regex("^[a-z0-9_-]+$", f.name))
+      (f.count >= 0 && floor(f.count) == f.count) && can(regex("^[a-z0-9_-]+$", f.name))
     ])
-    error_message = "Each family must have count >= 0 and a lowercase name matching [a-z0-9_-]."
+    error_message = "Each family must have an integer count >= 0 and a lowercase name matching [a-z0-9_-]."
   }
 }
 
@@ -165,37 +166,51 @@ variable "vcfa_quota_storage_limit_mib" {
 }
 
 # ---------------------------------------------------------------------------
-# Organization Networking
+# Organization / Regional Networking
 # ---------------------------------------------------------------------------
 variable "enable_org_networking" {
-  description = "Create a regional networking construct per org."
+  description = "Enable creation of REGIONAL networking per org (org networking is always created)."
   type        = bool
 }
 
 variable "networking_target_org_names" {
-  description = "Restrict networking creation to specific org names (empty = all)."
+  description = "Restrict REGIONAL networking to specific org names (empty = all orgs)."
   type        = list(string)
   default     = []
+  validation {
+    condition = alltrue([
+      for n in var.networking_target_org_names :
+      can(regex("^org_[a-z0-9_-]+_[0-9]{3}$", n))
+    ]) || length(var.networking_target_org_names) == 0
+    error_message = "networking_target_org_names entries must look like org_<family>_<NNN> (e.g., org_devs_001)."
+  }
 }
 
 variable "network_log_name_prefix" {
-  description = "Optional short prefix for log_name (≤ 4 chars recommended)."
+  description = "Optional short prefix for org networking log_name (≤ 4 chars, lowercase/number/_/-)."
   type        = string
   default     = ""
   validation {
-    condition     = length(var.network_log_name_prefix) <= 4
-    error_message = "network_log_name_prefix should be 4 characters or fewer."
+    condition     = length(var.network_log_name_prefix) <= 4 && can(regex("^[a-z0-9_-]*$", var.network_log_name_prefix))
+    error_message = "network_log_name_prefix: max 4 chars, allowed [a-z0-9_-]."
   }
 }
 
 variable "network_log_name_suffix" {
-  description = "Optional short suffix for log_name (≤ 4 chars recommended)."
+  description = "Optional short suffix for org networking log_name (≤ 4 chars, lowercase/number/_/-)."
   type        = string
   default     = ""
   validation {
-    condition     = length(var.network_log_name_suffix) <= 4
-    error_message = "network_log_name_suffix should be 4 characters or fewer."
+    condition     = length(var.network_log_name_suffix) <= 4 && can(regex("^[a-z0-9_-]*$", var.network_log_name_suffix))
+    error_message = "network_log_name_suffix: max 4 chars, allowed [a-z0-9_-]."
   }
+}
+
+# ✅ Keep the computed log_name ≤ 8 chars overall:
+#    2 (family two letters) + 3 (NNN) + prefix + suffix ≤ 8  => prefix+suffix ≤ 3
+validation {
+  condition     = length(var.network_log_name_prefix) + length(var.network_log_name_suffix) <= 3
+  error_message = "prefix+suffix must be ≤ 3 characters total to keep the final log_name ≤ 8."
 }
 
 # ---------------------------------------------------------------------------
