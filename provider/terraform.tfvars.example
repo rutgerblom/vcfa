@@ -10,6 +10,9 @@
 # =============================================================================
 # 🔐 VCFA Provider Connection
 # =============================================================================
+# VCF Automation API Authentication Type
+vcfa_auth_type = "integrated"
+
 # URL of your VCF Automation API endpoint.
 # Include https:// and no trailing slash.
 vcfa_url = "https://vcfa.example.lab"

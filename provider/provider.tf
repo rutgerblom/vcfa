@@ -1,8 +1,8 @@
 # Configure the VMware Cloud Foundation Automation Provider
 provider "vcfa" {
-  auth_type            = "integrated"
-  user                 = "admin"
-  password             = "VMware1!VMware1!"
+  auth_type            = var.vcfa_auth_type
+  user                 = var.vcfa_user
+  password             = var.vcfa_password
   org                  = var.vcfa_organization
   url                  = var.vcfa_url
   allow_unverified_ssl = var.vcfa_allow_unverified_ssl

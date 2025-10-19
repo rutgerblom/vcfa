@@ -5,6 +5,11 @@
 # ---------------------------------------------------------------------------
 # Provider & Connection
 # ---------------------------------------------------------------------------
+variable "vcfa_auth_type" {
+  description = "API Authentication type."
+  type        = string
+}
+
 variable "vcfa_url" {
   description = "VCF Automation API endpoint (include https://, no trailing slash)."
   type        = string
