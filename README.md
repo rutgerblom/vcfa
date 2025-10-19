@@ -33,8 +33,8 @@ Export your credentials before running Terraform (see the VCFA provider document
 
 ## 🧩 Configuration
 
-All variables are defined in [`variables.tf`](./variables.tf).  
-An example configuration file is provided as [`terraform.tfvars.example`](./terraform.tfvars.example).
+All variables are defined in [`variables.tf`](/provider/variables.tf).  
+An example configuration file is provided as [`terraform.tfvars.example`](/provider/terraform.tfvars.example).
 
 Copy it to begin:
 
