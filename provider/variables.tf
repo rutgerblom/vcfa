@@ -1,220 +1,207 @@
 ###############################################################################
-# VMware Cloud Foundation Automation (VCFA) – Variables
-# ---------------------------------------------------------------------------
-# This file defines all configurable inputs for the Terraform configuration.
-# Each variable includes a short explanation and example usage.
+# Variables
 ###############################################################################
 
-# =============================================================================
-# 🔐 Provider connection
-# =============================================================================
-
+# ---------------------------------------------------------------------------
+# Provider & Connection
+# ---------------------------------------------------------------------------
 variable "vcfa_url" {
+  description = "VCF Automation API endpoint (include https://, no trailing slash)."
   type        = string
-  description = "Base URL for the VCFA API (e.g. https://pod-240-vcf-automation.sddc.lab)"
-}
-
-variable "vcfa_organization" {
-  type        = string
-  description = "Provider organization name (typically 'System')"
+  validation {
+    condition     = can(regex("^https://", var.vcfa_url))
+    error_message = "vcfa_url must start with https://"
+  }
 }
 
 variable "vcfa_allow_unverified_ssl" {
+  description = "Allow self-signed or unverified SSL certificates (true for labs)."
   type        = bool
-  description = "Allow unverified SSL certificates (set to true for lab/test environments)"
-  default     = true
 }
 
-# =============================================================================
-# 🏗️ Organization generation
-# =============================================================================
-# The orgs are created automatically in numbered sequences (prefix + count).
-# Example: [{ prefix = \"org_it\", count = 35 }, { prefix = \"org_ot\", count = 35 }]
-# will create org_it_001–035 and org_ot_001–035.
+variable "vcfa_organization" {
+  description = "Provider organization name (often 'System')."
+  type        = string
+}
 
-variable "org_groups" {
-  description = "List of org groups to create; each group defines a prefix and how many to create"
+# Optional credentials if your provider block uses them; usually set via env:
+#   export TF_VAR_vcfa_user="..."
+#   export TF_VAR_vcfa_password="..."
+variable "vcfa_user" {
+  description = "VCFA username (set via environment variable TF_VAR_vcfa_user)."
+  type        = string
+  default     = null
+  nullable    = true
+}
+variable "vcfa_password" {
+  description = "VCFA password (set via environment variable TF_VAR_vcfa_password)."
+  type        = string
+  sensitive   = true
+  default     = null
+  nullable    = true
+}
+
+# ---------------------------------------------------------------------------
+# Organization Families & Settings
+# ---------------------------------------------------------------------------
+variable "org_families" {
+  description = <<-EOT
+    Families of organizations to create. Each family defines:
+      - name: logical family identifier (e.g., devs, ops)
+      - count: number of orgs to create (1..N)
+      - provider_gateway_name: name of the provider gateway to use
+      - edge_cluster_name:    name of the edge cluster to use
+  EOT
   type = list(object({
-    prefix = string
-    count  = number
+    name                  = string
+    count                 = number
+    provider_gateway_name = string
+    edge_cluster_name     = string
   }))
-  default = [
-    { prefix = "org_it", count = 35 },
-    { prefix = "org_ot", count = 35 },
-  ]
+  validation {
+    condition     = length(var.org_families) > 0
+    error_message = "org_families must contain at least one family."
+  }
+  validation {
+    condition = alltrue([
+      for f in var.org_families :
+      f.count >= 0 && can(regex("^[a-z0-9_-]+$", f.name))
+    ])
+    error_message = "Each family must have count >= 0 and a lowercase name matching [a-z0-9_-]."
+  }
 }
 
 variable "org_description_template" {
-  description = "Description for each org; use $${name} as placeholder for the org name"
+  description = "Template for org descriptions. Use $${name} to inject the org name."
   type        = string
-  default     = "Created by Terraform $${name}"
 }
 
 variable "org_enabled" {
-  description = "Whether new orgs are enabled immediately after creation"
+  description = "Whether new orgs should be enabled immediately."
   type        = bool
-  default     = true
 }
 
-# =============================================================================
-# 👤 Organization administrator account
-# =============================================================================
-# Each org gets one local administrator user. The username is built by replacing
-# 'org_' with 'admin_' (configurable below).
-
-variable "org_admin_role_name" {
-  description = "Role name to assign to the organization administrator"
-  type        = string
-  default     = "Organization Administrator"
-}
-
-variable "admin_user_replace_from" {
-  description = "Substring in the org name to replace when building the admin username"
-  type        = string
-  default     = "org_"
-}
-
-variable "admin_user_replace_to" {
-  description = "Replacement substring for the admin username (e.g., org_it_001 → admin_it_001)"
-  type        = string
-  default     = "admin_"
-}
-
-variable "org_admin_password" {
-  description = "Password for all organization admin users (set via environment variable TF_VAR_org_admin_password)"
-  type        = string
-  sensitive   = true
-}
-
-# =============================================================================
-# 🌐 Infrastructure lookups (static environment info)
-# =============================================================================
-# These point Terraform at your existing VCF infrastructure components.
-
+# ---------------------------------------------------------------------------
+# Infrastructure References
+# ---------------------------------------------------------------------------
 variable "vcfa_vcenter_name" {
+  description = "The vCenter name as known to VCFA."
   type        = string
-  description = "Name of the vCenter that hosts the Supervisor"
 }
-
 variable "vcfa_supervisor_name" {
+  description = "Supervisor name in the region."
   type        = string
-  description = "Name of the Supervisor cluster used by all orgs"
-  default     = "supervisor"
 }
-
 variable "vcfa_region_name" {
+  description = "VCFA region name."
   type        = string
-  description = "Region name (e.g., eu-north-1)"
 }
-
 variable "vcfa_region_zone_name" {
+  description = "VCFA region zone name."
   type        = string
-  description = "Zone name within the region (e.g., domain-c10)"
 }
 
+# Region storage policy *name* (string) required during provisioning.
 variable "vcfa_region_storage_policy_name" {
+  description = "Default storage policy name to use for the region (string name)."
   type        = string
-  description = "Display name of the storage policy used in this region"
 }
 
-# =============================================================================
-# 🧮 Quota configuration (compute + storage limits)
-# =============================================================================
-# Controls the resource limits each organization can consume.
-
+# ---------------------------------------------------------------------------
+# Quotas & VM Classes (required for provisioning)
+# ---------------------------------------------------------------------------
 variable "vcfa_vm_class_names" {
+  description = "Allowed VM class names per org."
   type        = list(string)
-  description = "VM class names to include in the quota (must exist in the region)"
-  default = [
-    "best-effort-xsmall",
-    "best-effort-small",
-    "best-effort-medium",
-    "best-effort-large",
-    "best-effort-xlarge",
-    "best-effort-2xlarge",
-    "best-effort-4xlarge",
-    "best-effort-8xlarge",
-  ]
+  validation {
+    condition     = length(var.vcfa_vm_class_names) > 0
+    error_message = "vcfa_vm_class_names must include at least one class."
+  }
 }
 
 variable "vcfa_quota_cpu_limit_mhz" {
+  description = "CPU limit per org (MHz)."
   type        = number
-  description = "Maximum CPU allocation per org (in MHz)"
-  default     = 100000
+  validation {
+    condition     = var.vcfa_quota_cpu_limit_mhz >= 0
+    error_message = "vcfa_quota_cpu_limit_mhz must be >= 0."
+  }
 }
 
 variable "vcfa_quota_cpu_reservation_mhz" {
+  description = "CPU reservation per org (MHz)."
   type        = number
-  description = "Reserved CPU allocation per org (in MHz)"
-  default     = 0
+  validation {
+    condition     = var.vcfa_quota_cpu_reservation_mhz >= 0
+    error_message = "vcfa_quota_cpu_reservation_mhz must be >= 0."
+  }
 }
 
 variable "vcfa_quota_memory_limit_mib" {
+  description = "Memory limit per org (MiB)."
   type        = number
-  description = "Maximum memory allocation per org (in MiB)"
-  default     = 100000
+  validation {
+    condition     = var.vcfa_quota_memory_limit_mib >= 0
+    error_message = "vcfa_quota_memory_limit_mib must be >= 0."
+  }
 }
 
 variable "vcfa_quota_memory_reservation_mib" {
+  description = "Memory reservation per org (MiB)."
   type        = number
-  description = "Reserved memory allocation per org (in MiB)"
-  default     = 0
+  validation {
+    condition     = var.vcfa_quota_memory_reservation_mib >= 0
+    error_message = "vcfa_quota_memory_reservation_mib must be >= 0."
+  }
 }
 
 variable "vcfa_quota_storage_limit_mib" {
+  description = "Storage cap per org (MiB)."
   type        = number
-  description = "Maximum storage per org for the selected policy (in MiB)"
-  default     = 1048576 # 1 TiB
+  validation {
+    condition     = var.vcfa_quota_storage_limit_mib >= 0
+    error_message = "vcfa_quota_storage_limit_mib must be >= 0."
+  }
 }
 
-# =============================================================================
-# 🧩 Networking (Org + Regional)
-# =============================================================================
-# Configure creation of organization networking and regional connectivity.
-
+# ---------------------------------------------------------------------------
+# Organization Networking
+# ---------------------------------------------------------------------------
 variable "enable_org_networking" {
+  description = "Create a regional networking construct per org."
   type        = bool
-  description = "Whether to create vcfa_org_networking resources for each org"
-  default     = true
 }
 
 variable "networking_target_org_names" {
+  description = "Restrict networking creation to specific org names (empty = all)."
   type        = list(string)
-  description = "Exact org names to attach networking to; empty list means 'all orgs'"
   default     = []
 }
 
 variable "network_log_name_prefix" {
+  description = "Optional short prefix for log_name (≤ 4 chars recommended)."
   type        = string
-  description = "Optional short prefix for org networking log_name (≤8 chars total)"
   default     = ""
+  validation {
+    condition     = length(var.network_log_name_prefix) <= 4
+    error_message = "network_log_name_prefix should be 4 characters or fewer."
+  }
 }
 
 variable "network_log_name_suffix" {
+  description = "Optional short suffix for log_name (≤ 4 chars recommended)."
   type        = string
-  description = "Optional short suffix for org networking log_name (≤8 chars total)"
   default     = ""
+  validation {
+    condition     = length(var.network_log_name_suffix) <= 4
+    error_message = "network_log_name_suffix should be 4 characters or fewer."
+  }
 }
 
-# ---- Region / Edge / Provider Gateways ----
-variable "vcfa_edge_cluster_name" {
-  type        = string
-  description = "Edge cluster name in the region (e.g., edge-cluster)"
-}
-
-variable "vcfa_provider_gateway_name_it" {
-  type        = string
-  description = "Provider gateway used by IT orgs (prefix org_it_)"
-}
-
-variable "vcfa_provider_gateway_name_ot" {
-  type        = string
-  description = "Provider gateway used by OT orgs (prefix org_ot_)"
-}
-
-# ---- Regional Networking naming ----
+# ---------------------------------------------------------------------------
+# Regional Networking Naming
+# ---------------------------------------------------------------------------
 variable "org_regional_networking_name_template" {
+  description = "Name template for the regional networking object (use $${name} for org name)."
   type        = string
-  description = "Template for regional networking name; use $${name} to insert the org name"
-  default     = "$${name}-regional"
 }

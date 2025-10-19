@@ -1,7 +1,7 @@
 # VMware Cloud Foundation Automation (VCFA) — Multi-Org Terraform Deployment
 
 This Terraform project automates the deployment of multiple **organizations** in VMware Cloud Foundation Automation (VCFA).  
-It creates organizations, local admin users, regional quotas, and both org-scoped and regional networking — all parameterized and repeatable.
+It creates organizations, regional quotas, org-level and regional networking — all parameterized, idempotent, and safe for shared use.
 
 ---
 
@@ -9,12 +9,12 @@ It creates organizations, local admin users, regional quotas, and both org-scope
 
 | Component | Description |
 |------------|-------------|
-| **Organization creation** | Automatically generates and enables orgs such as `org_it_001 … org_ot_035`. |
-| **Admin users** | Adds one Organization Administrator user per org (e.g. `admin_it_001`). |
-| **Regional quotas** | Assigns CPU, memory, storage, and VM class quotas for each org in the target region. |
-| **Org networking** | Creates an organization networking object with a unique short `log_name`. |
-| **Regional networking** | Connects each org’s networking to the correct provider gateway (IT or OT) and edge cluster. |
-| **Safety guardrails** | Protects orgs and org networking from accidental deletion using Terraform lifecycle rules. |
+| **Organization creation** | Dynamically generates orgs such as `org_devs_001 … org_ops_035` using configurable families. |
+| **Regional quotas** | Applies per-org CPU, memory, storage, and VM-class quotas in the selected region. |
+| **Org networking** | Creates an organization networking object with a unique ≤ 8-char `log_name`. |
+| **Regional networking** | Connects each org’s networking to the correct provider gateway and edge cluster per family. |
+| **Safety guardrails** | Prevents accidental deletion of orgs and org networking using Terraform lifecycle rules. |
+| **Concurrency control** | Designed for serial execution (`-parallelism=1`) to avoid VCFA API `BUSY`/409 conflicts. |
 
 ---
 
@@ -23,56 +23,50 @@ It creates organizations, local admin users, regional quotas, and both org-scope
 - Terraform **v1.7+**
 - VMware **VCFA Terraform provider** (installed automatically via `terraform init`)
 - API credentials with permissions to:
-  - Create organizations and users
-  - Apply region quotas
+  - Create organizations
+  - Apply regional quotas
   - Manage org and regional networking
 
-You must also export credentials before running Terraform (see the VCFA provider docs).
+Export your credentials before running Terraform (see the VCFA provider documentation).
 
 ---
 
 ## 🧩 Configuration
 
-All inputs are defined in [`variables.tf`](/provider/variables.tf).  
-To make setup easier, this repository includes an example configuration file:  
-👉 [`terraform.tfvars.example`](/provider/terraform.tfvars.example)
+All variables are defined in [`variables.tf`](./variables.tf).  
+An example configuration file is provided as [`terraform.tfvars.example`](./terraform.tfvars.example).
 
-Copy it before your first run:
+Copy it to begin:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Then edit the new `terraform.tfvars` file with values for your environment (VCFA endpoint, region, etc.).
+Edit `terraform.tfvars` to match your environment (VCFA endpoint, region, provider gateways, etc.).
 
 > 💡 **Tip:**  
-> Never commit your real `terraform.tfvars` file if it contains sensitive data such as passwords.  
-> The `.example` file should remain generic and safe for sharing.
-
-Example key settings:
-
-| Variable | Example | Description |
-|-----------|----------|-------------|
-| `vcfa_url` | `"https://vcfa.example.lab"` | Base VCFA API URL |
-| `vcfa_region_name` | `"lab-region-1"` | Target region |
-| `org_groups` | `[ { prefix = "org_it", count = 2 }, { prefix = "org_ot", count = 2 } ]` | Number and naming of orgs |
-| `vcfa_edge_cluster_name` | `"edge-cluster-1"` | Edge cluster for regional networking |
-| `vcfa_provider_gateway_name_it` | `"pgw_it"` | Provider gateway for IT orgs |
-| `vcfa_provider_gateway_name_ot` | `"pgw_ot"` | Provider gateway for OT orgs |
-| `org_admin_password` | (env var) | Admin password for all orgs |
-
-> 💡 **Tip:** Don’t hardcode passwords.  
-> Use environment variables instead:  
+> Never commit your real `terraform.tfvars` if it contains secrets.  
+> Use environment variables for credentials instead:
 > ```bash
 > export TF_VAR_org_admin_password='ChangeMe123!'
 > ```
+
+### Example key settings
+
+| Variable | Example | Description |
+|-----------|----------|-------------|
+| `vcfa_url` | `"https://pod-240-vcf-automation.sddc.lab"` | Base VCFA API URL |
+| `vcfa_region_name` | `"eu-north-1"` | Target region |
+| `org_families` | `[ { name = "devs", count = 35, provider_gateway_name = "provider_gw_org_devs", edge_cluster_name = "edge-cluster" }, { name = "ops", count = 35, provider_gateway_name = "provider_gw_org_ops", edge_cluster_name = "edge-cluster" } ]` | Defines org families and their capacities |
+| `vcfa_region_storage_policy_name` | `"mgmt-cluster-1 - Optimal Datastore Default Policy - RAID1"` | Storage policy to apply in quotas |
+| `org_admin_password` | (env var) | Optional admin password for lab use |
 
 ---
 
 ## 🚀 Usage
 
 ```bash
-# Initialize provider and modules
+# Initialize provider and dependencies
 terraform init
 
 # Validate configuration
@@ -81,31 +75,30 @@ terraform validate
 # Review what will be created
 terraform plan
 
-# Apply (serialized to avoid VCFA busy conflicts)
+# Apply (always serialized to avoid VCFA BUSY conflicts)
 terraform apply -parallelism=1
 ```
 
-> ⚠️ The VCFA API can be slow when creating many orgs.  
-> Use `-parallelism=1` or `-parallelism=2` to avoid `BUSY_ENTITY` errors.
+> ⚠️ **Important:**  
+> The VCFA API can process only one org-related operation at a time.  
+> Always run Terraform with `-parallelism=1` (or at most 2) for both **apply** and **destroy**.
 
 ---
 
 ## 🧩 Resource Relationships
 
 ```
-vcfa_org.labs
- ├─ vcfa_org_local_user.admins
- ├─ vcfa_org_region_quota.quota
+vcfa_org.this
+ ├─ vcfa_org_region_quota.this
  ├─ vcfa_org_networking.this
  │    └─ vcfa_org_regional_networking.this
 ```
 
 Each org produces:
 - 1 Organization  
-- 1 Admin user  
 - 1 Region quota  
-- 1 Org networking  
-- 1 Regional networking (linked to provider gateway)
+- 1 Org networking object  
+- 1 Regional networking connection
 
 ---
 
@@ -113,43 +106,37 @@ Each org produces:
 
 | Resource | Protection | Behavior |
 |-----------|-------------|----------|
-| `vcfa_org.labs` | `prevent_destroy = true` | Protects orgs from accidental deletion. |
-| `vcfa_org_networking.this` | `prevent_destroy = true` & `ignore_changes = [log_name]` | Prevents deletion and avoids provider trying to clear `log_name`. |
-
-To delete protected resources:
-1. Temporarily set `prevent_destroy = false` in `main.tf`.  
-2. Run `terraform destroy` in the correct order (see below).  
-3. Re-enable protection afterwards.
+| `vcfa_org.this` | (Optional future protection) | Use `prevent_destroy = true` if you wish to lock org deletion. |
+| `vcfa_org_networking.this` | `prevent_destroy = true` + `ignore_changes = [log_name]` | VCFA does not allow deleting org networking; Terraform will preserve it and skip changes. |
 
 ---
 
-## 🧨 Safe Deletion Order
+## 🧨 Safe Teardown Procedure
 
-If full teardown is needed:
-
-1. `vcfa_org_regional_networking.this`  
-2. `vcfa_org_networking.this`  
-3. `vcfa_org_region_quota.quota`  
-4. `vcfa_org_local_user.admins`  
-5. `vcfa_org.labs`
-
-Example command to destroy only regional networking:
+Because **`vcfa_org_networking`** cannot be destroyed via API, use the following sequence for full cleanup:
 
 ```bash
-terraform destroy -target='vcfa_org_regional_networking.this' -parallelism=1
+# 1️⃣ Destroy dependents first (safe to remove)
+terraform destroy -target=vcfa_org_regional_networking.this -auto-approve -parallelism=1
+terraform destroy -target=vcfa_org_region_quota.this -auto-approve -parallelism=1
+
+# 2️⃣ Remove non-deletable org networking from Terraform state
+terraform state rm 'vcfa_org_networking.this'
+
+# 3️⃣ Destroy remaining resources
+terraform destroy -auto-approve -parallelism=1
 ```
 
 ---
 
-## 🧾 Example Results
+## 🧾 Expected Results
 
-After applying successfully, you’ll have:
+After successful apply, you’ll have:
 
-- Multiple organizations (e.g., `org_it_001` → `org_ot_002`)  
-- One admin user per org (`admin_it_001`, etc.)  
-- One region quota per org  
-- One org networking object per org  
-- One regional networking connection per org attached to correct gateways  
+- Multiple organizations (e.g. `org_devs_001`, `org_ops_035`)  
+- Corresponding region quotas with CPU/MEM/storage/VM-class limits  
+- One org networking per org (unique `log_name`)  
+- One regional networking per org, mapped to correct gateways and edge clusters  
 
 ---
 
@@ -157,19 +144,19 @@ After applying successfully, you’ll have:
 
 | Error | Cause | Resolution |
 |-------|--------|------------|
-| `BUSY_ENTITY` | VCFA still processing a previous task | Re-run with `-parallelism=1` or wait a few minutes |
-| `BAD_REQUEST: existing Regional Networking Setting found` | Resource already exists outside Terraform | Manually delete in VCFA before re-applying |
-| `Variables not allowed in lifecycle` | Terraform limitation | Use hardcoded booleans in lifecycle blocks |
-| `log_name cannot be empty` | Provider tried to revert to default | Handled by `ignore_changes` in lifecycle |
+| `BUSY_ENTITY` / `409 Conflict` | VCFA API concurrency limit hit | Re-run with `-parallelism=1` |
+| `BAD_REQUEST: existing Regional Networking Setting found` | Networking object exists outside Terraform | Delete it manually in VCFA or import into state |
+| `Cannot delete Org Networking` | VCFA prevents deletion | Use the safe teardown steps above |
+| `log_name cannot be empty` | Provider attempted to clear the field | Handled via `ignore_changes` lifecycle |
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork and branch the repo.  
-2. Adjust prefixes, counts, and region settings as needed.  
-3. Test with a small subset (e.g., `count = 1`) before scaling up.  
-4. Submit PRs with improvements or new lab configurations.
+1. Fork or branch the repo.  
+2. Adjust family names, counts, and region settings as needed.  
+3. Test with a small subset (`count = 1`) before scaling up.  
+4. Submit improvements or new automation examples via PR.
 
 ---
 
@@ -177,6 +164,6 @@ After applying successfully, you’ll have:
 
 **Rutger Blom**  
 VMware Cloud Foundation Architect @ Advania Sweden  
-Specializing in NSX, VCF, and automation
+Specializing in VCF, NSX, and Infrastructure Automation
 
 ---

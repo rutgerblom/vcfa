@@ -1,97 +1,137 @@
-# ---------------------------------------------------------------------------
-# main.tf — parameterized org creation, admins, quotas, and networking
-# ---------------------------------------------------------------------------
+###############################################################################
+# MAIN CONFIGURATION
+# - Orgs from var.org_families (no hard-coded prefixes)
+# - Per-org Region Quota (CPU/Mem per zone, VM classes, storage policy+limit)
+# - Org Networking (log_name ≤ 8 chars; cannot be destroyed)
+# - Regional Networking (family-bound PGW & Edge)
+#
+# ✅ Concurrency guidance:
+#    Always run Terraform with -parallelism=1 to avoid VCFA BUSY/409 errors:
+#      terraform apply   -parallelism=1
+#      terraform destroy -parallelism=1
+###############################################################################
 
-locals {
-  all_orgs = flatten([
-    for g in var.org_groups : [
-      for i in range(1, g.count + 1) :
-      format("${g.prefix}_%03d", i)
-    ]
-  ])
-}
-
-# ----------------------------------------------------------------------------
-# Orgs (protected from accidental destroy)
-# ----------------------------------------------------------------------------
-resource "vcfa_org" "labs" {
-  for_each     = toset(local.all_orgs)
-  name         = each.key
-  display_name = each.key
-  description  = replace(var.org_description_template, "$${name}", each.key)
-  is_enabled   = var.org_enabled
-
-  # 🔒 Guardrail: prevent accidental deletion of orgs.
-  # To intentionally delete orgs, temporarily change this to `false`,
-  # then run your destroy. Switch back to `true` afterwards.
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-# ---------------------------------------------------------------------------
-# Add an Organization Administrator user to each org
-# ---------------------------------------------------------------------------
-
-data "vcfa_role" "org_admin" {
-  for_each = vcfa_org.labs
-  org_id   = each.value.id
-  name     = var.org_admin_role_name
-}
-
-resource "vcfa_org_local_user" "admins" {
-  for_each = vcfa_org.labs
-
-  org_id   = each.value.id
-  username = replace(each.key, var.admin_user_replace_from, var.admin_user_replace_to)
-  password = var.org_admin_password
-  role_ids = [data.vcfa_role.org_admin[each.key].id]
-
-  # (No prevent_destroy here so you can tear users down freely.)
-}
-
-# ---------------------------------------------------------------------------
-# Region / Supervisor / Zone / VM classes / Storage policy lookups
-# ---------------------------------------------------------------------------
-
-data "vcfa_vcenter" "vc" {
-  name = var.vcfa_vcenter_name
-}
-
-data "vcfa_supervisor" "supervisor" {
-  name       = var.vcfa_supervisor_name
-  vcenter_id = data.vcfa_vcenter.vc.id
-}
-
+# -----------------------------------------------------------------------------
+# Data sources: region + infra references that must already exist
+# -----------------------------------------------------------------------------
 data "vcfa_region" "target" {
   name = var.vcfa_region_name
 }
 
 data "vcfa_region_zone" "target" {
-  region_id = data.vcfa_region.target.id
   name      = var.vcfa_region_zone_name
-}
-
-data "vcfa_region_vm_class" "vmc" {
-  for_each  = toset(var.vcfa_vm_class_names)
-  name      = each.key
   region_id = data.vcfa_region.target.id
 }
 
-data "vcfa_region_storage_policy" "sp" {
+data "vcfa_vcenter" "target" {
+  name = var.vcfa_vcenter_name
+}
+
+data "vcfa_supervisor" "target" {
+  name       = var.vcfa_supervisor_name
+  vcenter_id = data.vcfa_vcenter.target.id
+}
+
+# Provider Gateways per family (e.g., devs/ops)
+data "vcfa_provider_gateway" "by_family" {
+  for_each = { for fam in var.org_families : fam.name => fam.provider_gateway_name }
+  name      = each.value
+  region_id = data.vcfa_region.target.id
+}
+
+# Edge Clusters per family (e.g., devs/ops)
+data "vcfa_edge_cluster" "by_family" {
+  for_each = { for fam in var.org_families : fam.name => fam.edge_cluster_name }
+  name      = each.value
+  region_id = data.vcfa_region.target.id
+}
+
+# Region VM classes (resolve IDs from names in tfvars)
+data "vcfa_region_vm_class" "classes" {
+  for_each = toset(var.vcfa_vm_class_names)
+  name      = each.value
+  region_id = data.vcfa_region.target.id
+}
+
+# Region storage policy (resolve ID from name in tfvars)
+data "vcfa_region_storage_policy" "target" {
   name      = var.vcfa_region_storage_policy_name
   region_id = data.vcfa_region.target.id
 }
 
-# ---------------------------------------------------------------------------
-# One org_region_quota per org (no prevent_destroy so you can clean up easily)
-# ---------------------------------------------------------------------------
-resource "vcfa_org_region_quota" "quota" {
-  for_each = vcfa_org.labs
+# -----------------------------------------------------------------------------
+# Locals: generated org names and metadata
+# -----------------------------------------------------------------------------
+locals {
+  # org names per family: org_<family>_NNN
+  org_names_by_family = {
+    for fam in var.org_families :
+    fam.name => [for i in range(1, fam.count + 1) : format("org_%s_%03d", fam.name, i)]
+  }
 
-  org_id         = each.value.id
-  region_id      = data.vcfa_region.target.id
-  supervisor_ids = [data.vcfa_supervisor.supervisor.id]
+  # flat list of all org names
+  org_names = flatten(values(local.org_names_by_family))
+
+  # map of org_name => { family, provider_gateway_name, edge_cluster_name }
+  org_meta = merge([
+    for fam in var.org_families : {
+      for i in range(1, fam.count + 1) :
+      format("org_%s_%03d", fam.name, i) => {
+        family                = fam.name
+        provider_gateway_name = fam.provider_gateway_name
+        edge_cluster_name     = fam.edge_cluster_name
+      }
+    }
+  ]...)
+
+  # networking targets (empty in tfvars means "all orgs")
+  networking_targets = length(var.networking_target_org_names) > 0 ? toset(var.networking_target_org_names) : toset(local.org_names)
+
+  # subset of orgs to apply regional networking to
+  orgs_for_networking = {
+    for name, meta in local.org_meta : name => meta
+    if contains(tolist(local.networking_targets), name)
+  }
+
+  # helper to derive admin usernames: org_* -> admin_*
+  admin_username = { for name in local.org_names : name => replace(name, "org_", "admin_") }
+
+  # list of region VM class IDs from data sources
+  region_vm_class_ids = [for _, v in data.vcfa_region_vm_class.classes : v.id]
+
+  # Short log name (≤8 chars) for org networking: <prefix><family2><NNN><suffix>
+  short_log_name_by_org = {
+    for name, meta in local.org_meta :
+    name => substr(
+      "${lower(var.network_log_name_prefix)}${lower(substr(meta.family, 0, 2))}${substr(name, length(name) - 3, 3)}${lower(var.network_log_name_suffix)}",
+      0,
+      8
+    )
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Organizations
+# -----------------------------------------------------------------------------
+resource "vcfa_org" "this" {
+  for_each = local.org_meta
+
+  name         = each.key
+  display_name = each.key
+  description  = replace(var.org_description_template, "$${name}", each.key)
+  is_enabled   = var.org_enabled
+}
+
+# -----------------------------------------------------------------------------
+# Per-Org Region Quota (CPU/Mem per zone, VM classes, storage policy + storage limit)
+# -----------------------------------------------------------------------------
+resource "vcfa_org_region_quota" "this" {
+  for_each = vcfa_org.this
+
+  org_id    = each.value.id
+  region_id = data.vcfa_region.target.id
+
+  supervisor_ids = [data.vcfa_supervisor.target.id]
 
   zone_resource_allocations {
     region_zone_id         = data.vcfa_region_zone.target.id
@@ -101,78 +141,98 @@ resource "vcfa_org_region_quota" "quota" {
     memory_reservation_mib = var.vcfa_quota_memory_reservation_mib
   }
 
-  region_vm_class_ids = [for _, v in data.vcfa_region_vm_class.vmc : v.id]
+  region_vm_class_ids = local.region_vm_class_ids
 
   region_storage_policy {
-    region_storage_policy_id = data.vcfa_region_storage_policy.sp.id
+    region_storage_policy_id = data.vcfa_region_storage_policy.target.id
     storage_limit_mib        = var.vcfa_quota_storage_limit_mib
   }
 }
 
-# ---------------------------------------------------------------------------
-# Org networking (protected + ignore log_name drift)
-# ---------------------------------------------------------------------------
-
-locals {
-  org_log_short = {
-    for k in keys(vcfa_org.labs) :
-    k => "${split("_", k)[1]}${split("_", k)[2]}"
-  }
-
-  networking_target_orgs = length(var.networking_target_org_names) > 0 ? {
-    for k, v in vcfa_org.labs : k => v
-    if contains(var.networking_target_org_names, k)
-  } : vcfa_org.labs
-}
-
+# -----------------------------------------------------------------------------
+# Org Networking (log_name ≤ 8 chars)  — CANNOT BE DESTROYED
+# -----------------------------------------------------------------------------
+# ⚠️ VCFA API does not allow deleting Org Networking.
+#
+# Concurrency tip: run with -parallelism=1 (apply & destroy) to avoid BUSY/409:
+#   terraform apply   -parallelism=1
+#   terraform destroy -parallelism=1
+#
+# Safe teardown sequence:
+#   1) Destroy dependents:
+#        terraform destroy -target=vcfa_org_regional_networking.this -auto-approve -parallelism=1
+#        terraform destroy -target=vcfa_org_region_quota.this -auto-approve -parallelism=1
+#   2) Remove Org Networking from state:
+#        terraform state rm 'vcfa_org_networking.this'
+#   3) Destroy the remainder:
+#        terraform destroy -auto-approve -parallelism=1
 resource "vcfa_org_networking" "this" {
-  for_each = var.enable_org_networking ? local.networking_target_orgs : {}
+  for_each = vcfa_org.this
 
-  org_id = each.value.id
+  org_id   = each.value.id
+  log_name = local.short_log_name_by_org[each.key]
 
-  # Ensure ≤ 8 chars total; derived from org name
-  log_name = substr(
-    "${var.network_log_name_prefix}${local.org_log_short[each.key]}${var.network_log_name_suffix}",
-    0, 8
-  )
-
-  # 🔒 Guardrails:
-  #  - ignore_changes prevents the provider from trying to “revert” log_name.
-  #  - prevent_destroy avoids accidental deletes of org networking.
-  #    To delete orgs, set this to false temporarily and destroy networking first.
   lifecycle {
-    ignore_changes  = [log_name]
     prevent_destroy = true
+    ignore_changes  = [log_name]
   }
 }
 
-# ---------------------------------------------------------------------------
-# Regional networking per org (no prevent_destroy; serialize applies instead)
-# ---------------------------------------------------------------------------
-
-data "vcfa_edge_cluster" "target" {
-  name      = var.vcfa_edge_cluster_name
-  region_id = data.vcfa_region.target.id
-}
-
-data "vcfa_provider_gateway" "it" {
-  name      = var.vcfa_provider_gateway_name_it
-  region_id = data.vcfa_region.target.id
-}
-
-data "vcfa_provider_gateway" "ot" {
-  name      = var.vcfa_provider_gateway_name_ot
-  region_id = data.vcfa_region.target.id
-}
-
+# -----------------------------------------------------------------------------
+# Regional Networking per Org (optional, filtered)
+# -----------------------------------------------------------------------------
 resource "vcfa_org_regional_networking" "this" {
-  for_each = vcfa_org_networking.this
+  for_each = var.enable_org_networking ? local.orgs_for_networking : {}
 
-  name        = replace(var.org_regional_networking_name_template, "$${name}", each.key)
-  org_id      = each.value.id
-  region_id   = data.vcfa_region.target.id
-  provider_gateway_id = startswith(each.key, "org_it_") ? data.vcfa_provider_gateway.it.id : data.vcfa_provider_gateway.ot.id
-  edge_cluster_id     = data.vcfa_edge_cluster.target.id
+  name      = replace(var.org_regional_networking_name_template, "$${name}", each.key)
+  org_id    = vcfa_org.this[each.key].id
+  region_id = data.vcfa_region.target.id
 
-  # (No prevent_destroy — destroy/apply these in serialized batches with -parallelism=1.)
+  provider_gateway_id = data.vcfa_provider_gateway.by_family[each.value.family].id
+  edge_cluster_id     = data.vcfa_edge_cluster.by_family[each.value.family].id
+
+  depends_on = [vcfa_org_networking.this]
+}
+
+# -----------------------------------------------------------------------------
+# Helpful Outputs
+# -----------------------------------------------------------------------------
+output "org_names" {
+  description = "All generated organization names."
+  value       = local.org_names
+}
+
+output "org_admin_usernames" {
+  description = "Derived admin usernames per org."
+  value       = local.admin_username
+}
+
+output "networking_applied_to" {
+  description = "Organizations that received regional networking."
+  value       = keys(vcfa_org_regional_networking.this)
+}
+
+# -----------------------------------------------------------------------------
+# Usage / Guardrail Instructions
+# -----------------------------------------------------------------------------
+output "usage_instructions" {
+  description = "How to run safely with VCFA concurrency limits and non-deletable Org Networking."
+  value = <<EOT
+Run Terraform serially to avoid VCFA BUSY/409 errors:
+
+  terraform apply  -parallelism=1
+  terraform destroy -parallelism=1
+
+Full teardown despite non-deletable Org Networking:
+
+  1) Destroy dependents:
+       terraform destroy -target=vcfa_org_regional_networking.this -auto-approve -parallelism=1
+       terraform destroy -target=vcfa_org_region_quota.this -auto-approve -parallelism=1
+
+  2) Remove org networking from state:
+       terraform state rm 'vcfa_org_networking.this'
+
+  3) Destroy the remainder:
+       terraform destroy -auto-approve -parallelism=1
+EOT
 }

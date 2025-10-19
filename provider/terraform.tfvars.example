@@ -24,11 +24,11 @@ vcfa_organization = "System"
 # =============================================================================
 # 🏗️ Organization Generation
 # =============================================================================
-# Each object defines a prefix (org_it/org_ot) and how many sequential orgs to create.
-# Example below creates org_it_001–002 and org_ot_001–002.
+# Each object defines a prefix (org_devs/org_ops) and how many sequential orgs to create.
+# Example below creates org_devs_001–002 and org_ops_001–002.
 org_groups = [
-  { prefix = "org_it", count = 2 },
-  { prefix = "org_ot", count = 2 },
+  { prefix = "org_devs", count = 2 },
+  { prefix = "org_ops", count = 2 },
 ]
 
 # Template for org descriptions ($${name} inserts the org name).
@@ -108,8 +108,8 @@ network_log_name_suffix = ""
 vcfa_edge_cluster_name = "edge-cluster-1"
 
 # Separate provider gateways for IT and OT org families
-vcfa_provider_gateway_name_it = "pgw_it"
-vcfa_provider_gateway_name_ot = "pgw_ot"
+vcfa_provider_gateway_name_it = "pgw_devs"
+vcfa_provider_gateway_name_ot = "pgw_ops"
 
 # =============================================================================
 # 🔧 Regional Networking Naming
