@@ -144,11 +144,10 @@ After successful apply, you’ll have:
 
 | Error | Cause | Resolution |
 |-------|--------|------------|
-| `BUSY_ENTITY` / `409 Conflict` | VCFA API concurrency limit hit | Re-run with `-parallelism=1` |
+| `BUSY_ENTITY` | VCFA API concurrency limit hit | Re-run with `-parallelism=1` |
 | `BAD_REQUEST: existing Regional Networking Setting found` | Networking object exists outside Terraform | Delete manually in VCFA or import into state |
 | `Cannot delete Org Networking` | VCFA prevents deletion | Use the safe teardown steps above |
 | `log_name cannot be empty` | Provider tried to clear `log_name` | Handled by `ignore_changes` lifecycle |
-| `role_ids not set` | User creation missing role reference | Handled by automatic role lookup in `main.tf` |
 
 ---
 
