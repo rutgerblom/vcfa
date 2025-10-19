@@ -1,6 +1,6 @@
 # VMware Cloud Foundation Automation (VCFA) — Terraform Projects
 
-This repository is a growing collection of **Terraform automation blueprints** for managing and extending **VMware Cloud Foundation Automation (VCFA)** environments.
+This repository is a collection of **Terraform automation blueprints** for managing and extending **VMware Cloud Foundation Automation (VCFA)** environments.
 
 Each subdirectory contains a **self-contained Terraform project** targeting a specific VCFA use case.
 
