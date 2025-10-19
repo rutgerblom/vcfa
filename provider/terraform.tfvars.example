@@ -1,9 +1,9 @@
 ###############################################################################
 # VMware Cloud Foundation Automation (VCFA) – Example Configuration
 # ---------------------------------------------------------------------------
-# This file contains environment-specific values used by Terraform.
+# Environment-specific values used by Terraform.
 #
-# 👉 Adjust names, regions, and prefixes to fit your lab.
+# 👉 Adjust family names, counts, and references to fit your lab.
 # 👉 Never commit real passwords or API keys if this repo is shared.
 ###############################################################################
 
@@ -22,13 +22,26 @@ vcfa_allow_unverified_ssl = true
 vcfa_organization = "System"
 
 # =============================================================================
-# 🏗️ Organization Generation
+# 🏗️ Organization Families (names, counts, and per-family infra)
 # =============================================================================
-# Each object defines a prefix (org_devs/org_ops) and how many sequential orgs to create.
-# Example below creates org_devs_001–002 and org_ops_001–002.
-org_groups = [
-  { prefix = "org_devs", count = 2 },
-  { prefix = "org_ops", count = 2 },
+# Define one or more families of orgs. Each entry provides:
+#   - name: family key (e.g., "devs", "ops")
+#   - count: how many orgs to create (org_<family>_001..NNN)
+#   - provider_gateway_name: Provider GW name in the target region
+#   - edge_cluster_name:     Edge Cluster name in the target region
+org_families = [
+  {
+    name                  = "devs"
+    count                 = 2
+    provider_gateway_name = "pgw_devs"
+    edge_cluster_name     = "edge-cluster-1"
+  },
+  {
+    name                  = "ops"
+    count                 = 2
+    provider_gateway_name = "pgw_ops"
+    edge_cluster_name     = "edge-cluster-1"
+  }
 ]
 
 # Template for org descriptions ($${name} inserts the org name).
@@ -38,23 +51,9 @@ org_description_template = "Created by Terraform $${name}"
 org_enabled = true
 
 # =============================================================================
-# 👤 Org Administrator Accounts
-# =============================================================================
-# Terraform builds admin usernames automatically by replacing 'org_' with 'admin_'.
-# Example: org_it_001 → admin_it_001
-admin_user_replace_from = "org_"
-admin_user_replace_to   = "admin_"
-
-# 🧠 Password note:
-# It’s best practice to set passwords via environment variables:
-#   export TF_VAR_org_admin_password='ChangeMe123!'
-# The line below is ONLY an example. Prefer the env var above.
-org_admin_password = "ChangeMe123!"
-
-# =============================================================================
 # 🌐 Infrastructure References
 # =============================================================================
-# These names must exactly match what exists in your VCF environment.
+# These names must exactly match objects that exist in your VCFA environment.
 
 vcfa_vcenter_name               = "vcsa.example.lab"
 vcfa_supervisor_name            = "supervisor-1"
@@ -63,10 +62,9 @@ vcfa_region_zone_name           = "zone-a"
 vcfa_region_storage_policy_name = "vSAN Default Storage Policy"
 
 # =============================================================================
-# 🧮 Quota Configuration
+# 🧮 Quota Configuration (applied via vcfa_org_region_quota)
 # =============================================================================
-# Resource limits applied to each organization.
-
+# Allowed VM classes in the region (names must exist in your VCFA region).
 vcfa_vm_class_names = [
   "best-effort-xsmall",
   "best-effort-small",
@@ -78,38 +76,33 @@ vcfa_vm_class_names = [
   "best-effort-8xlarge",
 ]
 
-# CPU and memory limits (MHz/MiB)
+# CPU and memory limits (MHz/MiB) per org in the region/zone.
 vcfa_quota_cpu_limit_mhz          = 50000
 vcfa_quota_cpu_reservation_mhz    = 0
 vcfa_quota_memory_limit_mib       = 51200
 vcfa_quota_memory_reservation_mib = 0
 
-# Storage cap per org (MiB)
+# Storage cap per org (MiB) under the region storage policy.
 vcfa_quota_storage_limit_mib      = 524288  # = 512 GiB
 
 # =============================================================================
-# 🧩 Organization Networking
+# 🧩 Networking
 # =============================================================================
-# Create a networking construct per org (log_name ≤ 8 chars total).
-# If you want to restrict to specific orgs, list them under networking_target_org_names.
+# Org Networking:
+# - Created for every org with a short log_name (≤ 8 chars) derived from family+index.
+# - Not deletable via API; see README for safe teardown steps.
+
+# Regional Networking:
+# - Set enable_org_networking=true to create a regional networking object per org.
+# - To limit to specific orgs, list them below as org_devs_001-style names.
 
 enable_org_networking       = true
 networking_target_org_names = []   # Leave empty to apply to all orgs.
 
-# Optional short prefix/suffix for log_name (each ≤ 3–4 chars to stay under 8 total)
+# Optional short prefix/suffix for the org networking log_name.
+# NOTE: Prefix+suffix must be ≤ 3 total chars to keep the final log_name ≤ 8.
 network_log_name_prefix = ""
 network_log_name_suffix = ""
-
-# =============================================================================
-# 🏗️ Region / Edge / Provider Gateways
-# =============================================================================
-# These must correspond to objects that already exist in your VCFA region.
-
-vcfa_edge_cluster_name = "edge-cluster-1"
-
-# Separate provider gateways for IT and OT org families
-vcfa_provider_gateway_name_it = "pgw_devs"
-vcfa_provider_gateway_name_ot = "pgw_ops"
 
 # =============================================================================
 # 🔧 Regional Networking Naming
