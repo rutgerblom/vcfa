@@ -206,13 +206,6 @@ variable "network_log_name_suffix" {
   }
 }
 
-# ✅ Keep the computed log_name ≤ 8 chars overall:
-#    2 (family two letters) + 3 (NNN) + prefix + suffix ≤ 8  => prefix+suffix ≤ 3
-validation {
-  condition     = length(var.network_log_name_prefix) + length(var.network_log_name_suffix) <= 3
-  error_message = "prefix+suffix must be ≤ 3 characters total to keep the final log_name ≤ 8."
-}
-
 # ---------------------------------------------------------------------------
 # Regional Networking Naming
 # ---------------------------------------------------------------------------
