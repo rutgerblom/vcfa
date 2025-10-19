@@ -2,6 +2,7 @@
 # MAIN CONFIGURATION
 # - Orgs from var.org_families (no hard-coded prefixes)
 # - Per-org Region Quota (CPU/Mem per zone, VM classes, storage policy+limit)
+# - Org Admin Users (one per org)
 # - Org Networking (log_name ≤ 8 chars; cannot be destroyed)
 # - Regional Networking (family-bound PGW & Edge)
 #
@@ -123,6 +124,31 @@ resource "vcfa_org" "this" {
 }
 
 # -----------------------------------------------------------------------------
+# Lookup: "Organization Administrator" role per org
+# -----------------------------------------------------------------------------
+data "vcfa_role" "org_admin" {
+  # one lookup per org we create
+  for_each = vcfa_org.this
+
+  org_id = each.value.id
+  name   = "Organization Administrator"
+}
+
+# -----------------------------------------------------------------------------
+# Org Admin Users (one Organization Administrator per org)
+# -----------------------------------------------------------------------------
+resource "vcfa_org_local_user" "admin" {
+  for_each = vcfa_org.this
+
+  org_id   = each.value.id
+  username = local.admin_username[each.key]
+  password = var.org_admin_password
+
+  # Provider requires role IDs, not names
+  role_ids = [data.vcfa_role.org_admin[each.key].id]
+}
+
+# -----------------------------------------------------------------------------
 # Per-Org Region Quota (CPU/Mem per zone, VM classes, storage policy + storage limit)
 # -----------------------------------------------------------------------------
 resource "vcfa_org_region_quota" "this" {
@@ -152,20 +178,6 @@ resource "vcfa_org_region_quota" "this" {
 # -----------------------------------------------------------------------------
 # Org Networking (log_name ≤ 8 chars)  — CANNOT BE DESTROYED
 # -----------------------------------------------------------------------------
-# ⚠️ VCFA API does not allow deleting Org Networking.
-#
-# Concurrency tip: run with -parallelism=1 (apply & destroy) to avoid BUSY/409:
-#   terraform apply   -parallelism=1
-#   terraform destroy -parallelism=1
-#
-# Safe teardown sequence:
-#   1) Destroy dependents:
-#        terraform destroy -target=vcfa_org_regional_networking.this -auto-approve -parallelism=1
-#        terraform destroy -target=vcfa_org_region_quota.this -auto-approve -parallelism=1
-#   2) Remove Org Networking from state:
-#        terraform state rm 'vcfa_org_networking.this'
-#   3) Destroy the remainder:
-#        terraform destroy -auto-approve -parallelism=1
 resource "vcfa_org_networking" "this" {
   for_each = vcfa_org.this
 

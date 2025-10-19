@@ -33,6 +33,7 @@ variable "vcfa_user" {
   default     = null
   nullable    = true
 }
+
 variable "vcfa_password" {
   description = "VCFA password (set via environment variable TF_VAR_vcfa_password)."
   type        = string
@@ -83,20 +84,32 @@ variable "org_enabled" {
 }
 
 # ---------------------------------------------------------------------------
+# Org Administrator (one local admin user per org)
+# ---------------------------------------------------------------------------
+variable "org_admin_password" {
+  description = "Password for the per-org Organization Administrator account (e.g., admin_devs_001). Prefer setting via TF_VAR_org_admin_password."
+  type        = string
+  sensitive   = true
+}
+
+# ---------------------------------------------------------------------------
 # Infrastructure References
 # ---------------------------------------------------------------------------
 variable "vcfa_vcenter_name" {
   description = "The vCenter name as known to VCFA."
   type        = string
 }
+
 variable "vcfa_supervisor_name" {
   description = "Supervisor name in the region."
   type        = string
 }
+
 variable "vcfa_region_name" {
   description = "VCFA region name."
   type        = string
 }
+
 variable "vcfa_region_zone_name" {
   description = "VCFA region zone name."
   type        = string

@@ -13,6 +13,7 @@ It creates organizations, regional quotas, org-level and regional networking —
 | **Regional quotas** | Applies per-org CPU, memory, storage, and VM-class quotas in the selected region. |
 | **Org networking** | Creates an organization networking object with a unique ≤ 8-char `log_name`. |
 | **Regional networking** | Connects each org’s networking to the correct provider gateway and edge cluster per family. |
+| **Org admin users** | Automatically creates one Organization Administrator per org. |
 | **Safety guardrails** | Prevents accidental deletion of orgs and org networking using Terraform lifecycle rules. |
 | **Concurrency control** | Designed for serial execution (`-parallelism=1`) to avoid VCFA API `BUSY`/409 conflicts. |
 
@@ -23,7 +24,7 @@ It creates organizations, regional quotas, org-level and regional networking —
 - Terraform **v1.7+**
 - VMware **VCFA Terraform provider** (installed automatically via `terraform init`)
 - API credentials with permissions to:
-  - Create organizations
+  - Create organizations and users
   - Apply regional quotas
   - Manage org and regional networking
 
@@ -89,6 +90,7 @@ terraform apply -parallelism=1
 
 ```
 vcfa_org.this
+ ├─ vcfa_org_local_user.admin
  ├─ vcfa_org_region_quota.this
  ├─ vcfa_org_networking.this
  │    └─ vcfa_org_regional_networking.this
@@ -96,6 +98,7 @@ vcfa_org.this
 
 Each org produces:
 - 1 Organization  
+- 1 Admin user  
 - 1 Region quota  
 - 1 Org networking object  
 - 1 Regional networking connection
@@ -106,8 +109,8 @@ Each org produces:
 
 | Resource | Protection | Behavior |
 |-----------|-------------|----------|
-| `vcfa_org.this` | (Optional future protection) | Use `prevent_destroy = true` if you wish to lock org deletion. |
-| `vcfa_org_networking.this` | `prevent_destroy = true` + `ignore_changes = [log_name]` | VCFA does not allow deleting org networking; Terraform will preserve it and skip changes. |
+| `vcfa_org.this` | (Optional) Add `prevent_destroy = true` if you wish to lock org deletion. |
+| `vcfa_org_networking.this` | `prevent_destroy = true` + `ignore_changes = [log_name]` | VCFA does not allow deleting org networking; Terraform preserves and skips changes. |
 
 ---
 
@@ -116,7 +119,7 @@ Each org produces:
 Because **`vcfa_org_networking`** cannot be destroyed via API, use the following sequence for full cleanup:
 
 ```bash
-# 1️⃣ Destroy dependents first (safe to remove)
+# 1️⃣ Destroy dependents first
 terraform destroy -target=vcfa_org_regional_networking.this -auto-approve -parallelism=1
 terraform destroy -target=vcfa_org_region_quota.this -auto-approve -parallelism=1
 
@@ -134,9 +137,10 @@ terraform destroy -auto-approve -parallelism=1
 After successful apply, you’ll have:
 
 - Multiple organizations (e.g. `org_devs_001`, `org_ops_035`)  
-- Corresponding region quotas with CPU/MEM/storage/VM-class limits  
-- One org networking per org (unique `log_name`)  
-- One regional networking per org, mapped to correct gateways and edge clusters  
+- One admin user per org (`admin_devs_001`, etc.)  
+- Corresponding region quotas (CPU/MEM/storage/VM-class limits)  
+- One org networking object per org  
+- One regional networking per org linked to correct gateways and edges  
 
 ---
 
@@ -145,16 +149,17 @@ After successful apply, you’ll have:
 | Error | Cause | Resolution |
 |-------|--------|------------|
 | `BUSY_ENTITY` / `409 Conflict` | VCFA API concurrency limit hit | Re-run with `-parallelism=1` |
-| `BAD_REQUEST: existing Regional Networking Setting found` | Networking object exists outside Terraform | Delete it manually in VCFA or import into state |
+| `BAD_REQUEST: existing Regional Networking Setting found` | Networking object exists outside Terraform | Delete manually in VCFA or import into state |
 | `Cannot delete Org Networking` | VCFA prevents deletion | Use the safe teardown steps above |
-| `log_name cannot be empty` | Provider attempted to clear the field | Handled via `ignore_changes` lifecycle |
+| `log_name cannot be empty` | Provider tried to clear `log_name` | Handled by `ignore_changes` lifecycle |
+| `role_ids not set` | User creation missing role reference | Handled by automatic role lookup in `main.tf` |
 
 ---
 
 ## 🤝 Contributing
 
 1. Fork or branch the repo.  
-2. Adjust family names, counts, and region settings as needed.  
+2. Adjust org family names, counts, and region settings.  
 3. Test with a small subset (`count = 1`) before scaling up.  
 4. Submit improvements or new automation examples via PR.
 

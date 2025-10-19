@@ -21,6 +21,10 @@ vcfa_allow_unverified_ssl = true
 # Provider organization name (usually "System" for provider-level operations).
 vcfa_organization = "System"
 
+# (Optional) Credentials are typically provided via environment variables:
+#   export TF_VAR_vcfa_user="administrator"
+#   export TF_VAR_vcfa_password="your-password"
+
 # =============================================================================
 # 🏗️ Organization Families (names, counts, and per-family infra)
 # =============================================================================
@@ -49,6 +53,14 @@ org_description_template = "Created by Terraform $${name}"
 
 # Whether new orgs should be enabled immediately.
 org_enabled = true
+
+# =============================================================================
+# 👤 Org Administrator (per org)
+# =============================================================================
+# Best practice: set via environment variable and omit from this file:
+#   export TF_VAR_org_admin_password='ChangeMe123!'
+# For demo/example purposes only, you may set a placeholder here:
+org_admin_password = "ChangeMe123!"
 
 # =============================================================================
 # 🌐 Infrastructure References
